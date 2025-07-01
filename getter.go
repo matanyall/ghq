@@ -126,6 +126,12 @@ func (g *getter) getRemoteRepository(remote RemoteRepository, branch string) (ge
 			localRepoRoot = filepath.Join(local.RootPath, remoteURL.Hostname(), l)
 		}
 
+		// In worktree mode, append branch directory here as well (this path is
+		// ultimately provided to the VCS backend).
+		if worktreeMode {
+			localRepoRoot = filepath.Join(localRepoRoot, branchForDir)
+		}
+
 		if worktreeMode {
 			// Ensure parent directory for branch directory exists (org/repo)
 			if err := os.MkdirAll(filepath.Dir(localRepoRoot), 0o755); err != nil {
