@@ -1,0 +1,73 @@
+---
+# GoReleaser configuration file for ghq
+# See https://goreleaser.com/ for full reference documentation.
+
+version: 1
+
+# Ensure we have everything we need before building.
+before:
+  hooks:
+    - go mod tidy
+
+# Build matrix – we build a single binary for the major platforms/archs that
+# Homebrew supports and that users commonly consume.
+builds:
+  - id: ghq
+    binary: ghq
+    main: ./main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # Set the git revision so the application can report it at runtime.
+    ldflags:
+      - "-s -w -X main.revision={{.ShortCommit}}"
+    # We do not need any extra steps after build – GoReleaser will archive.
+
+# Archive settings – create tar.gz (or zip for Windows) per OS/arch and include
+# useful extras such as shell-completion files.
+archives:
+  - id: ghq
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds:
+      - ghq
+    # Override format for Windows to zip so that PowerShell can extract it
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.adoc
+      - misc/bash/_ghq
+      - misc/zsh/_ghq
+    replacements:
+      darwin: macOS
+      linux: Linux
+      windows: Windows
+
+# Generate a single checksums file for all release assets.
+checksum:
+  name_template: "{{ .ProjectName }}_checksums.txt"
+
+# Homebrew tap configuration – publishes/updates a formula in the specified
+# tap repository. Requires the token that can push to that repo.
+brews:
+  - name: ghq
+    tap:
+      owner: matanyall
+      name: homebrew-tap
+    folder: Formula
+    homepage: "https://github.com/{{ .GithubOwner }}/{{ .GithubRepo }}"
+    description: "Manage remote repository clones"
+    commit_author:
+      name: goreleaserbot
+      email: goreleaser@github.com
+
+# Use the GitHub changelog generator that GoReleaser provides.
+changelog:
+  use: github

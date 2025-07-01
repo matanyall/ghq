@@ -29,3 +29,11 @@ jobs:
       run: go test -coverprofile coverage.out -covermode atomic ./...
     - name: Send coverage
       uses: codecov/codecov-action@v1
+    - name: Validate GoReleaser configuration
+      uses: goreleaser/goreleaser-action@v5
+      with:
+        version: latest
+        distribution: goreleaser
+        args: check
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
