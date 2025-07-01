@@ -93,7 +93,10 @@ func (g *getter) getRemoteRepository(remote RemoteRepository, branch string) (ge
 			}
 		}
 		if l := detectLocalRepoRoot(remoteURL.Path, repoURL.Path); l != "" {
-			localRepoRoot = filepath.Join(local.RootPath, remoteURL.Hostname(), l)
+			// Only override if worktree mode is not enabled, to preserve the worktree path structure
+			if !isWorktreeModeEnabled(remoteURL.String()) || g.bare {
+				localRepoRoot = filepath.Join(local.RootPath, remoteURL.Hostname(), l)
+			}
 		}
 
 		if g.bare {

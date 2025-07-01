@@ -93,10 +93,19 @@ ghq.<url>.root::
     you can specify a repository-specific root directory instead of the common ghq root directory. +
     The URL is matched against '<url>' using 'git config --get-urlmatch'.
 
+ghq.worktreeMode::
+    When set to true, repositories are cloned into a subdirectory named after the default branch
+    (e.g., +~/ghq/github.com/user/repo/main+). This makes it easier to create multiple worktrees
+    for the same repository under different branch directories. +
+    This setting can also be controlled by the 'GHQ_WORKTREE_MODE' environment variable. +
+    Defaults to false. This option is ignored for bare repositories.
+
 
 === Example configuration (.gitconfig):
 
 ....
+[ghq]
+worktreeMode = true
 [ghq "https://git.example.com/repos/"]
 vcs = git
 root = ~/myproj
@@ -107,6 +116,11 @@ root = ~/myproj
 GHQ_ROOT::
     If set to a path, this value is used as the only root directory regardless
     of other existing ghq.root settings.
+
+GHQ_WORKTREE_MODE::
+    If set to any non-empty value, enables worktree mode. When enabled,
+    repositories are cloned into a subdirectory named after the default branch.
+    This overrides the 'ghq.worktreeMode' configuration setting.
 
 == [[directory-structures]]DIRECTORY STRUCTURES
 
@@ -124,6 +138,22 @@ Local repositories are placed under 'ghq.root' with named github.com/_user_/_rep
     |   `-- ghq/
     `-- urfave/
         `-- cli/
+....
+
+When 'ghq.worktreeMode' is enabled, repositories include the default branch name:
+
+....
+~/ghq
+|-- github.com/
+    |-- google/
+    |   `-- go-github/
+    |       `-- master/
+    |-- motemen/
+    |   `-- ghq/
+    |       `-- master/
+    `-- urfave/
+        `-- cli/
+            `-- main/
 ....
 
 

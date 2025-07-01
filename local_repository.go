@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -15,6 +16,7 @@ import (
 )
 
 const envGhqRoot = "GHQ_ROOT"
+const envGhqWorktreeMode = "GHQ_WORKTREE_MODE"
 
 // LocalRepository represents local repository
 type LocalRepository struct {
@@ -78,6 +80,15 @@ func LocalRepositoryFromURL(remoteURL *url.URL, bare bool) (*LocalRepository, er
 	)
 	relPath := strings.TrimSuffix(filepath.Join(pathParts...), ".git")
 	pathParts[len(pathParts)-1] = strings.TrimSuffix(pathParts[len(pathParts)-1], ".git")
+	
+	// Check if worktree mode is enabled
+	if isWorktreeModeEnabled(remoteURL.String()) && !bare {
+		// In worktree mode, add the default branch name to the path
+		defaultBranch := getDefaultBranchName(remoteURL)
+		relPath = filepath.Join(relPath, defaultBranch)
+		pathParts = append(pathParts, defaultBranch)
+	}
+	
 	if bare {
 		// Force to append ".git" even if remoteURL does not end with ".git".
 		relPath = relPath + ".git"
@@ -444,4 +455,54 @@ func primaryLocalRepositoryRoot() (string, error) {
 		return "", err
 	}
 	return roots[0], nil
+}
+
+// isWorktreeModeEnabled checks if worktree mode is enabled via environment variable or git config
+func isWorktreeModeEnabled(remoteURL string) bool {
+	// Check environment variable first
+	if os.Getenv(envGhqWorktreeMode) != "" {
+		return true
+	}
+	
+	// Check git config
+	if !codecommitLikeURLPattern.MatchString(remoteURL) {
+		worktreeMode, err := gitconfig.Bool("ghq.worktreeMode")
+		if err == nil && worktreeMode {
+			return true
+		}
+		
+		// Also check URL-specific config
+		worktreeModeStr, err := gitconfig.Do("--bool", "--get-urlmatch", "ghq.worktreeMode", remoteURL)
+		if err == nil && strings.TrimSpace(worktreeModeStr) == "true" {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// getDefaultBranchName attempts to get the default branch name for a repository
+// If it can't determine the default branch, it returns "main"
+func getDefaultBranchName(remoteURL *url.URL) string {
+	// Try to get the default branch from git ls-remote
+	cmd := exec.Command("git", "ls-remote", "--symref", remoteURL.String(), "HEAD")
+	output, err := cmd.Output()
+	if err == nil {
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "ref: refs/heads/") {
+				// Extract the branch name from "ref: refs/heads/branch-name"
+				branchPath := strings.TrimPrefix(line, "ref: refs/heads/")
+				// Split by whitespace and take the first part to handle any trailing content
+				parts := strings.Fields(branchPath)
+				if len(parts) > 0 {
+					return parts[0]
+				}
+			}
+		}
+	}
+	
+	// Fallback to "main" if we can't determine the default branch
+	return "main"
 }

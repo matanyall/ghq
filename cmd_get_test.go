@@ -294,6 +294,67 @@ func TestCommandGet(t *testing.T) {
 				t.Errorf("got: %s, expect: %s", err.Error(), expect)
 			}
 		},
+	}, {
+		name: "worktree mode via environment variable",
+		scenario: func(t *testing.T, tmpRoot string, cloneArgs *_cloneArgs, updateArgs *_updateArgs) {
+			// Set the worktree mode environment variable
+			os.Setenv("GHQ_WORKTREE_MODE", "1")
+			defer os.Unsetenv("GHQ_WORKTREE_MODE")
+
+			// In worktree mode, the path should include the default branch name
+			localDir := filepath.Join(tmpRoot, "github.com", "motemen", "ghq-test-repo", "main")
+
+			app.Run([]string{"", "get", "motemen/ghq-test-repo"})
+
+			expect := "https://github.com/motemen/ghq-test-repo"
+			if cloneArgs.remote.String() != expect {
+				t.Errorf("got: %s, expect: %s", cloneArgs.remote, expect)
+			}
+			if filepath.ToSlash(cloneArgs.local) != filepath.ToSlash(localDir) {
+				t.Errorf("got: %s, expect: %s", filepath.ToSlash(cloneArgs.local), filepath.ToSlash(localDir))
+			}
+		},
+	}, {
+		name: "worktree mode via gitconfig",
+		scenario: func(t *testing.T, tmpRoot string, cloneArgs *_cloneArgs, updateArgs *_updateArgs) {
+			t.Cleanup(gitconfig.WithConfig(t, `
+[ghq]
+  worktreeMode = true
+`))
+
+			// In worktree mode, the path should include the default branch name
+			localDir := filepath.Join(tmpRoot, "github.com", "motemen", "ghq-test-repo", "main")
+
+			app.Run([]string{"", "get", "motemen/ghq-test-repo"})
+
+			expect := "https://github.com/motemen/ghq-test-repo"
+			if cloneArgs.remote.String() != expect {
+				t.Errorf("got: %s, expect: %s", cloneArgs.remote, expect)
+			}
+			if filepath.ToSlash(cloneArgs.local) != filepath.ToSlash(localDir) {
+				t.Errorf("got: %s, expect: %s", filepath.ToSlash(cloneArgs.local), filepath.ToSlash(localDir))
+			}
+		},
+	}, {
+		name: "worktree mode disabled for bare repositories",
+		scenario: func(t *testing.T, tmpRoot string, cloneArgs *_cloneArgs, updateArgs *_updateArgs) {
+			// Set the worktree mode environment variable
+			os.Setenv("GHQ_WORKTREE_MODE", "1")
+			defer os.Unsetenv("GHQ_WORKTREE_MODE")
+
+			// Even with worktree mode enabled, bare repos should not use worktree path
+			localDir := filepath.Join(tmpRoot, "github.com", "motemen", "ghq-test-repo.git")
+
+			app.Run([]string{"", "get", "--bare", "motemen/ghq-test-repo"})
+
+			expect := "https://github.com/motemen/ghq-test-repo"
+			if cloneArgs.remote.String() != expect {
+				t.Errorf("got: %s, expect: %s", cloneArgs.remote, expect)
+			}
+			if filepath.ToSlash(cloneArgs.local) != filepath.ToSlash(localDir) {
+				t.Errorf("got: %s, expect: %s", filepath.ToSlash(cloneArgs.local), filepath.ToSlash(localDir))
+			}
+		},
 	}}
 
 	for _, tc := range testCases {
