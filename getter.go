@@ -50,6 +50,24 @@ func (g *getter) get(argURL string) (getInfo, error) {
 // If isShallow is true, does shallow cloning. (no effect if already cloned or the VCS is Mercurial and git-svn)
 func (g *getter) getRemoteRepository(remote RemoteRepository, branch string) (getInfo, error) {
 	remoteURL := remote.URL()
+
+	// Determine if the special "worktree mode" feature is enabled. This feature
+	// will clone the repository under an additional sub-directory that matches
+	// the branch name (e.g. org/repo/main). When no branch is specified by the
+	// user, we will try to discover the default branch of the remote (Git only)
+	// so that the directory name still reflects an actual branch. If detection
+	// fails we simply fall back to "main".
+	worktreeMode := isWorktreeModeEnabled()
+	var branchForDir = branch
+	if worktreeMode && branchForDir == "" {
+		// Attempt to auto-detect default branch for Git remotes. We ignore any
+		// error and use the detected value when available.
+		branchForDir = detectDefaultGitBranch(remoteURL.String())
+		if branchForDir == "" {
+			branchForDir = "main"
+		}
+	}
+
 	local, err := LocalRepositoryFromURL(remoteURL, g.bare)
 	if err != nil {
 		return getInfo{}, err
@@ -62,6 +80,18 @@ func (g *getter) getRemoteRepository(remote RemoteRepository, branch string) (ge
 		fpath   = local.FullPath
 		newPath = false
 	)
+
+	// If worktree mode is enabled, append the branch directory to where we are
+	// going to place the repository.
+	if worktreeMode {
+		fpath = filepath.Join(fpath, branchForDir)
+		// Refresh LocalRepository information so that other parts of ghq (e.g.
+		// look, list) are aware of the actual location.
+		if lr, err := LocalRepositoryFromFullPath(fpath, nil); err == nil {
+			info.localRepository = lr
+			local = lr
+		}
+	}
 
 	_, err = os.Stat(fpath)
 	if err != nil {
@@ -96,6 +126,19 @@ func (g *getter) getRemoteRepository(remote RemoteRepository, branch string) (ge
 			localRepoRoot = filepath.Join(local.RootPath, remoteURL.Hostname(), l)
 		}
 
+		// In worktree mode, append branch directory here as well (this path is
+		// ultimately provided to the VCS backend).
+		if worktreeMode {
+			localRepoRoot = filepath.Join(localRepoRoot, branchForDir)
+		}
+
+		if worktreeMode {
+			// Ensure parent directory for branch directory exists (org/repo)
+			if err := os.MkdirAll(filepath.Dir(localRepoRoot), 0o755); err != nil {
+				return getInfo{}, err
+			}
+		}
+
 		if g.bare {
 			localRepoRoot = localRepoRoot + ".git"
 		}
@@ -110,7 +153,7 @@ func (g *getter) getRemoteRepository(remote RemoteRepository, branch string) (ge
 					dir:       localRepoRoot,
 					shallow:   g.shallow,
 					silent:    g.silent,
-					branch:    branch,
+					branch:    branchForDir,
 					recursive: g.recursive,
 					bare:      g.bare,
 					partial:   g.partial,

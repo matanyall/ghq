@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/url"
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -34,6 +35,9 @@ func withFakeGitBackend(t *testing.T, block func(*testing.T, string, *_cloneArgs
 	var originalGitBackend = GitBackend
 	tmpBackend := &VCSBackend{
 		Clone: func(vg *vcsGetOption) error {
+			// Simulate clone by creating the directory tree so that tests can verify
+			// actual file system side-effects.
+			_ = os.MkdirAll(vg.dir, 0o755)
 			cloneArgs = _cloneArgs{
 				remote:    vg.url,
 				local:     filepath.FromSlash(vg.dir),
